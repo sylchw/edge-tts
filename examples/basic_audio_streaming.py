@@ -31,8 +31,4 @@ async def _main() -> None:
 
 
 if __name__ == "__main__":
-    loop = asyncio.get_event_loop()
-    try:
-        loop.run_until_complete(_main())
-    finally:
-        loop.close()
+    asyncio.get_event_loop().run_until_complete(_main())

@@ -414,21 +414,11 @@ class Communicate:
                                 "We received a binary message, but we are not expecting one."
                             )
 
-                        if len(received.data) < 2:
-                            raise UnexpectedResponse(
-                                "We received a binary message, but it is missing the header length."
-                            )
-
-                        # See: https://github.com/microsoft/cognitive-services-speech-sdk-js/blob/d071d11/src/common.speech/WebsocketMessageFormatter.ts#L46
-                        header_length = int.from_bytes(received.data[:2], "big")
-                        if len(received.data) < header_length + 2:
-                            raise UnexpectedResponse(
-                                "We received a binary message, but it is missing the audio data."
-                            )
-
                         yield {
                             "type": "audio",
-                            "data": received.data[header_length + 2 :],
+                            "data": received.data[
+                                received.data.find(b"Path:audio\r\n") + 12 :
+                            ],
                         }
                         audio_was_received = True
                     elif received.type == aiohttp.WSMsgType.ERROR:
@@ -449,6 +439,7 @@ class Communicate:
         """
         Save the audio and metadata to the specified files.
         """
+        written_audio: bool = False
         metadata: Union[TextIOWrapper, ContextManager[None]] = (
             open(metadata_fname, "w", encoding="utf-8")
             if metadata_fname is not None
@@ -458,9 +449,15 @@ class Communicate:
             async for message in self.stream():
                 if message["type"] == "audio":
                     audio.write(message["data"])
+                    written_audio = True
                 elif (
                     isinstance(metadata, TextIOWrapper)
                     and message["type"] == "WordBoundary"
                 ):
                     json.dump(message, metadata)
                     metadata.write("\n")
+
+        if not written_audio:
+            raise NoAudioReceived(
+                "No audio was received from the service, so the file is empty."
+            )
